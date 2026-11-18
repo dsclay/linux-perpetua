@@ -1,0 +1,167 @@
+// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
+/*
+ * Samsung Galaxy Note 8 (greatlte/SM-N950N) device tree source
+ *
+ * Derived from the Galaxy S8 (dreamlte/SM-G950F) tree by Ivaylo Ivanov.
+ *
+ * This is a first-boot skeleton: the framebuffer, the keys and the ramoops
+ * region, and the handoff description. Everything else of the device is a
+ * step-3 item and is listed at the end of this file.
+ */
+
+/dts-v1/;
+#include "exynos8895.dtsi"
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+
+/ {
+	model = "Samsung Galaxy Note 8 (SM-N950N)";
+	compatible = "samsung,greatlte", "samsung,exynos8895";
+	chassis-type = "handset";
+
+	chosen {
+		#address-cells = <2>;
+		#size-cells = <1>;
+		ranges;
+
+		bootargs = "rdinit=/init panic=10";
+
+		/*
+		 * FIXME: describe the bootloader's own tree. Until the values
+		 * below are replaced with what /sys/firmware/fdt shows on the
+		 * stock firmware, no bootloader tree matches, and the kernel
+		 * boots the tree that S-Boot passes, as it would without the
+		 * handoff.
+		 *
+		 * stock-compatible: the root compatible of the stock tree.
+		 * stock-model:      its root model, or a word of its bootargs
+		 *                   that names this device and not the SoC.
+		 */
+		fdt-handoff {
+			stock-compatible = "FIXME,greatlte-stock-compatible";
+			stock-model = "FIXME-greatlte-stock-model";
+			keep-initrd;
+		};
+
+		/* FIXME: base and size are the S8's; check them against the stock tree. */
+		framebuffer: framebuffer@cc000000 {
+			compatible = "simple-framebuffer";
+			reg = <0 0xcc000000 (1440 * 2960 * 4)>;
+			width = <1440>;
+			height = <2960>;
+			stride = <(1440 * 4)>;
+			format = "a8r8g8b8";
+		};
+	};
+
+	/*
+	 * The Note 8 has 6 GB. The handoff replaces this map with the
+	 * bootloader's usable memory; the S8's map stands in until it does.
+	 */
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x0 0x80000000 0x3c800000>,
+		      <0x0 0xc0000000 0x40000000>,
+		      <0x8 0x80000000 0x80000000>;
+	};
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <1>;
+		ranges;
+
+		/* FIXME: the S8's ramoops address; confirm it is free on the Note 8. */
+		ramoops@92000000 {
+			compatible = "ramoops";
+			reg = <0 0x92000000 0x8000>;
+			record-size = <0x4000>;
+			console-size = <0x4000>;
+		};
+
+		cont_splash_mem: framebuffer@cc000000 {
+			reg = <0 0xcc000000 (1440 * 2960 * 4)>;
+			no-map;
+		};
+	};
+
+	/* FIXME: the pins are the S8's; verify them on the Note 8. */
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		pinctrl-0 = <&key_power &key_voldown &key_volup &key_wink>;
+		pinctrl-names = "default";
+
+		power-key {
+			label = "Power";
+			linux,code = <KEY_POWER>;
+			gpios = <&gpa2 4 GPIO_ACTIVE_LOW>;
+			wakeup-source;
+		};
+
+		voldown-key {
+			label = "Volume Down";
+			linux,code = <KEY_VOLUMEDOWN>;
+			gpios = <&gpa0 4 GPIO_ACTIVE_LOW>;
+		};
+
+		volup-key {
+			label = "Volume Up";
+			linux,code = <KEY_VOLUMEUP>;
+			gpios = <&gpa0 3 GPIO_ACTIVE_LOW>;
+		};
+
+		/* Bixby. Mapped as a camera button for now. */
+		wink-key {
+			label = "Camera";
+			linux,code = <KEY_CAMERA>;
+			gpios = <&gpa0 6 GPIO_ACTIVE_LOW>;
+			wakeup-source;
+		};
+	};
+};
+
+&oscclk {
+	clock-frequency = <26000000>;
+};
+
+&pinctrl_alive {
+	key_power: key-power-pins {
+		samsung,pins = "gpa2-4";
+		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+		samsung,pin-drv = <EXYNOS7_PIN_DRV_LV1>;
+	};
+
+	key_voldown: key-voldown-pins {
+		samsung,pins = "gpa0-4";
+		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+		samsung,pin-drv = <EXYNOS7_PIN_DRV_LV1>;
+	};
+
+	key_volup: key-volup-pins {
+		samsung,pins = "gpa0-3";
+		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+		samsung,pin-drv = <EXYNOS7_PIN_DRV_LV1>;
+	};
+
+	key_wink: key-wink-pins {
+		samsung,pins = "gpa0-6";
+		samsung,pin-function = <EXYNOS_PIN_FUNC_EINT>;
+		samsung,pin-pud = <EXYNOS_PIN_PULL_NONE>;
+		samsung,pin-drv = <EXYNOS7_PIN_DRV_LV1>;
+	};
+};
+
+/*
+ * Left out of the first boot, to add as step-3 items once the Note 8's own
+ * stock tree and the reference kernel show what the board uses:
+ *
+ *  - touchscreen: the S8 has a Samsung S6SY761 on hsi2c_23 behind usi9; the
+ *    Note 8's controller is not confirmed.
+ *  - microSD: the S8's sd2 pins and card-detect GPIO (gpa1-5) are not
+ *    confirmed, and the card's regulators need the PMIC.
+ *  - the S2MPS PMICs, UFS, USB, display (DECON/DSI), charger and fuel gauge,
+ *    Wi-Fi, Bluetooth, modem, sensors and the S Pen.
+ */

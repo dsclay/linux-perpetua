@@ -1,0 +1,5 @@
+# Samsung Galaxy Note 8 (SM-N950N)
+name='Samsung Galaxy Note 8'
+vendor=exynos
+soc=exynos8895
+boot=samsung-sboot

@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+"""Pack a Samsung S-Boot boot image with a raw arm64 Image and a ramdisk.
+
+Usage: samsung-sboot TEMPLATE IMAGE RAMDISK OUTPUT [EVIDENCE]
+
+S-Boot (the Exynos bootloader of the Galaxy S8 and Note 8) loads an Android
+header version 0 image from the BOOT partition: a raw kernel, a ramdisk, an
+optional second stage and its own device tree image (the header's dt_size),
+each padded to the page size, then a trailer that Samsung's tools append
+(normally "SEANDROIDENFORCE"). The bootloader fills the device tree it finds
+there with the memory map and the boot arguments and passes it on; Perpetua's
+handoff then replaces it with the built-in one.
+
+TEMPLATE is the device's own stock boot.img. Its header, addresses, command
+line, device tree image and trailer are kept; the kernel, the ramdisk and
+the image id change. IMAGE must be an arm64 Image with the Perpetua built-in
+tree; RAMDISK is a gzip newc initramfs.
+
+Besides OUTPUT, an Odin package OUTPUT.tar.md5 is written: a ustar archive
+that holds the image as boot.img, with its MD5 appended the way Odin checks it.
+
+The image must fit the BOOT partition: SBOOT_PARTITION_SIZE bytes, 32 MiB
+when unset (check it against /proc/partitions on the device).
+
+No device access. OUTPUT and OUTPUT.tar.md5 must not exist.
+"""
+import gzip
+import hashlib
+import io
+import json
+import os
+from pathlib import Path
+import struct
+import sys
+import tarfile
+
+MAGIC = b"ANDROID!"
+DEFAULT_PARTITION = 32 * 1024 * 1024
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def pad(data, page):
+    return data + bytes(-len(data) % page)
+
+
+def parse(image):
+    """The fields of a version 0 header and its sections, as bytes."""
+    assert image[:8] == MAGIC, "not an Android boot image"
+    (kernel_size, _kernel_addr, ramdisk_size, _ramdisk_addr, second_size,
+     _second_addr, _tags_addr, page) = struct.unpack_from("<8I", image, 8)
+    assert page in (2048, 4096), f"unexpected page size {page}"
+    field40 = struct.unpack_from("<I", image, 40)[0]
+    # Samsung keeps dt_size here; AOSP's later versions keep a small version.
+    assert not 1 <= field40 <= 4, "header version 1 or later: use another adapter"
+    dt_size = field40
+    pos = page
+    sections = {}
+    for name, size in (("kernel", kernel_size), ("ramdisk", ramdisk_size),
+                       ("second", second_size), ("dt", dt_size)):
+        sections[name] = image[pos:pos + size]
+        assert len(sections[name]) == size, f"{name} runs past the end of the template"
+        pos += len(pad(sections[name], page))
+    return dict(page=page, dt_size=dt_size, sections=sections, end=pos,
+                trailer=image[pos:])
+
+
+def image_id(sections):
+    ident = hashlib.sha1()
+    for name in ("kernel", "ramdisk", "second", "dt"):
+        data = sections[name]
+        if name == "dt" and not data:
+            continue
+        ident.update(data)
+        ident.update(struct.pack("<I", len(data)))
+    return ident.digest()
+
+
+def pack(stock, parsed, kernel, ramdisk):
+    page = parsed["page"]
+    sections = dict(parsed["sections"], kernel=kernel, ramdisk=ramdisk)
+    header = bytearray(stock[:page])
+    struct.pack_into("<I", header, 8, len(kernel))
+    struct.pack_into("<I", header, 16, len(ramdisk))
+    header[576:608] = image_id(sections) + bytes(12)
+    body = b"".join(pad(sections[n], page) for n in ("kernel", "ramdisk", "second", "dt"))
+    return bytes(header) + body + parsed["trailer"], sections
+
+
+def odin_package(image):
+    """A ustar archive with boot.img, and the MD5 line that Odin verifies."""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w", format=tarfile.USTAR_FORMAT) as tar:
+        info = tarfile.TarInfo("boot.img")
+        info.size = len(image)
+        info.mode = 0o644
+        tar.addfile(info, io.BytesIO(image))
+    data = buf.getvalue()
+    return data, hashlib.md5(data).hexdigest()
+
+
+def main():
+    if len(sys.argv) not in (5, 6):
+        sys.exit(__doc__)
+    template, source, ramdisk, output = map(Path, sys.argv[1:5])
+    evidence = Path(sys.argv[5]) if len(sys.argv) == 6 else None
+    package = output.with_name(output.name + ".tar.md5")
+    assert not output.exists() and not package.exists(), "refusing to replace an image"
+    limit = int(os.environ.get("SBOOT_PARTITION_SIZE", DEFAULT_PARTITION))
+
+    stock = template.read_bytes()
+    assert b"AVBf" not in stock[-4096:], "template has an AVB footer: not an S-Boot image"
+    parsed = parse(stock)
+    kernel = source.read_bytes()
+    assert kernel[56:60] == b"ARM\x64", "IMAGE is not a raw arm64 Image"
+    initrd = ramdisk.read_bytes()
+    assert gzip.decompress(initrd)[:6] in (b"070701", b"070702"), "ramdisk is not gzip newc"
+
+    packed, sections = pack(stock, parsed, kernel, initrd)
+    assert len(packed) <= limit, (
+        f"image is {len(packed)} bytes, the BOOT partition holds {limit}: "
+        "trim the kernel configuration or the ramdisk")
+
+    # Read it back with the parser that read the template.
+    again = parse(packed)
+    for name in ("kernel", "ramdisk", "second", "dt"):
+        assert again["sections"][name] == sections[name], f"{name} differs after packing"
+    assert again["trailer"] == parsed["trailer"], "trailer differs after packing"
+    assert packed[:8] == MAGIC and packed[36:40] == stock[36:40]
+    # Apart from the two sizes and the id, every header byte is the template's.
+    restored = bytearray(packed[:parsed["page"]])
+    for start, end in ((8, 12), (16, 20), (576, 608)):
+        restored[start:end] = stock[start:end]
+    assert bytes(restored) == stock[:parsed["page"]], "header changed beyond sizes and id"
+
+    output.write_bytes(packed)
+    tar, md5 = odin_package(packed)
+    package.write_bytes(tar + f"{md5}  {package.name}\n".encode())
+
+    record = dict(bytes=len(packed), sha256=sha(packed), template_sha256=sha(stock),
+                  image_sha256=sha(kernel), ramdisk_sha256=sha(initrd),
+                  dt_sha256=sha(parsed["sections"]["dt"]), dt_size=parsed["dt_size"],
+                  page_size=parsed["page"], trailer=parsed["trailer"].decode("latin-1"),
+                  partition_limit=limit, odin_package=package.name, odin_md5=md5)
+    if evidence:
+        evidence.mkdir(parents=True, exist_ok=True)
+        (evidence / "boot-format.json").write_text(json.dumps(record, indent=2) + "\n")
+    print(json.dumps(record))
+
+
+if __name__ == "__main__":
+    main()

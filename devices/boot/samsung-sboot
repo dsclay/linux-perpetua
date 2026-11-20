@@ -20,8 +20,10 @@ tree; RAMDISK is a gzip newc initramfs.
 Besides OUTPUT, an Odin package OUTPUT.tar.md5 is written: a ustar archive
 that holds the image as boot.img, with its MD5 appended the way Odin checks it.
 
-The image must fit the BOOT partition: SBOOT_PARTITION_SIZE bytes, 32 MiB
-when unset (check it against /proc/partitions on the device).
+The image must fit the BOOT partition: SBOOT_PARTITION_SIZE bytes, 40 MiB
+when unset (check it against /proc/partitions on the device). A TEMPLATE
+dumped from the partition is padded with zeros to that size; the padding
+after the trailer marker is not copied.
 
 No device access. OUTPUT and OUTPUT.tar.md5 must not exist.
 """
@@ -36,7 +38,9 @@ import sys
 import tarfile
 
 MAGIC = b"ANDROID!"
-DEFAULT_PARTITION = 32 * 1024 * 1024
+MARKER = b"SEANDROIDENFORCE"
+# BOOT of the Galaxy S8 and Note 8 (sda7) is 40960 KiB.
+DEFAULT_PARTITION = 40 * 1024 * 1024
 
 
 def sha(data):
@@ -64,8 +68,11 @@ def parse(image):
         sections[name] = image[pos:pos + size]
         assert len(sections[name]) == size, f"{name} runs past the end of the template"
         pos += len(pad(sections[name], page))
+    trailer = image[pos:]
+    if trailer.startswith(MARKER) and not trailer[len(MARKER):].strip(b"\0"):
+        trailer = MARKER  # a partition dump: drop the zero padding after it
     return dict(page=page, dt_size=dt_size, sections=sections, end=pos,
-                trailer=image[pos:])
+                trailer=trailer)
 
 
 def image_id(sections):

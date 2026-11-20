@@ -7,6 +7,10 @@
  * This is a first-boot skeleton: the framebuffer, the keys and the ramoops
  * region, and the handoff description. Everything else of the device is a
  * step-3 item and is listed at the end of this file.
+ *
+ * The handoff identity, the memory map, the framebuffer address, the key
+ * pins and the oscillator come from the stock tree of a unit that reports
+ * SM-N950F (bootloader N950FXXUGDZEA) in /sys/firmware/fdt.
  */
 
 /dts-v1/;
@@ -15,7 +19,7 @@
 #include <dt-bindings/input/input.h>
 
 / {
-	model = "Samsung Galaxy Note 8 (SM-N950N)";
+	model = "Samsung Galaxy Note 8";
 	compatible = "samsung,greatlte", "samsung,exynos8895";
 	chassis-type = "handset";
 
@@ -27,23 +31,17 @@
 		bootargs = "rdinit=/init panic=10";
 
 		/*
-		 * FIXME: describe the bootloader's own tree. Until the values
-		 * below are replaced with what /sys/firmware/fdt shows on the
-		 * stock firmware, no bootloader tree matches, and the kernel
-		 * boots the tree that S-Boot passes, as it would without the
-		 * handoff.
-		 *
-		 * stock-compatible: the root compatible of the stock tree.
-		 * stock-model:      its root model, or a word of its bootargs
-		 *                   that names this device and not the SoC.
+		 * The bootloader's own tree, as /sys/firmware/fdt shows it. The
+		 * compatible string has a space after its comma: that is how Samsung
+		 * wrote it, and it must match exactly.
 		 */
 		fdt-handoff {
-			stock-compatible = "FIXME,greatlte-stock-compatible";
-			stock-model = "FIXME-greatlte-stock-model";
+			stock-compatible = "samsung, SM-N950F rev0.4";
+			stock-model = "Samsung SM-N950F board based on EXYNOS8895";
 			keep-initrd;
 		};
 
-		/* FIXME: base and size are the S8's; check them against the stock tree. */
+		/* s3cfb.bootloaderfb=0xcc000000 and a 1440x2960 DECON, as in the stock tree. */
 		framebuffer: framebuffer@cc000000 {
 			compatible = "simple-framebuffer";
 			reg = <0 0xcc000000 (1440 * 2960 * 4)>;
@@ -55,14 +53,15 @@
 	};
 
 	/*
-	 * The Note 8 has 6 GB. The handoff replaces this map with the
-	 * bootloader's usable memory; the S8's map stands in until it does.
+	 * The Note 8 has 6 GB, the stock tree's four banks. The handoff
+	 * replaces this map with the bootloader's usable memory.
 	 */
 	memory@80000000 {
 		device_type = "memory";
 		reg = <0x0 0x80000000 0x3c800000>,
 		      <0x0 0xc0000000 0x40000000>,
-		      <0x8 0x80000000 0x80000000>;
+		      <0x8 0x80000000 0x80000000>,
+		      <0x9 0x00000000 0x80000000>;
 	};
 
 	reserved-memory {
@@ -70,7 +69,11 @@
 		#size-cells = <1>;
 		ranges;
 
-		/* FIXME: the S8's ramoops address; confirm it is free on the Note 8. */
+		/*
+		 * The S8's ramoops address. The stock tree does not reserve it, but the
+		 * command line's ess_setup=0x91200000 has no size: if the phone resets
+		 * without a log, suspect an overlap and move this.
+		 */
 		ramoops@92000000 {
 			compatible = "ramoops";
 			reg = <0 0x92000000 0x8000>;
@@ -84,7 +87,7 @@
 		};
 	};
 
-	/* FIXME: the pins are the S8's; verify them on the Note 8. */
+	/* The pins of the stock tree's gpio_keys: gpa0-3, gpa0-4, gpa0-6, gpa2-4. */
 	gpio-keys {
 		compatible = "gpio-keys";
 

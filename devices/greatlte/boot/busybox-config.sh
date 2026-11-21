@@ -32,5 +32,7 @@ CONFIG_SETSID=y
 CFG
 if [ "${STATIC:-1}" = 1 ]; then echo CONFIG_STATIC=y >> .config; else echo "# CONFIG_STATIC is not set" >> .config; fi
 make oldconfig </dev/null >/tmp/oldconfig.log 2>&1 || { cat /tmp/oldconfig.log; exit 1; }
-grep -E "warning|nonexistent" /tmp/oldconfig.log && exit 1
-exit 0
+if grep -E "^\.config:[0-9]+:warning|nonexistent symbol" /tmp/oldconfig.log; then
+	echo "busybox-config: kconfig complained about the settings" >&2
+	exit 1
+fi

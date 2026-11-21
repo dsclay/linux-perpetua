@@ -98,7 +98,9 @@ jobs:
           gzip -9 -c ../linux/arch/arm64/boot/Image > Image.gz
           cp ../linux/arch/arm64/boot/dts/exynos/exynos8895-greatlte.dtb .
           cp ../initramfs.cpio.gz .
-          mkimage -f ../../devices/greatlte/boot/image.its image.fit
+          # dtc looks for the /incbin/ files next to the .its, so copy it here.
+          cp ../../devices/greatlte/boot/image.its .
+          mkimage -f image.its image.fit
           ls -l image.fit
           test "$(stat -c %s image.fit)" -le $((32 * 1024 * 1024))
 

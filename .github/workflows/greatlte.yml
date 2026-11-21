@@ -106,7 +106,10 @@ jobs:
 
       - name: Build barebox
         run: |
-          git init out/barebox && cd out/barebox
+          # Not under the Linux tree: pbl/decomp.c includes "../../../lib/...",
+          # which would find the kernel's lib/ three levels up from out/barebox.
+          B="$RUNNER_TEMP/barebox"
+          git init "$B" && cd "$B"
           git remote add origin https://github.com/barebox/barebox
           git fetch --depth 1 origin "$BAREBOX_COMMIT"
           git checkout -q FETCH_HEAD
@@ -119,11 +122,12 @@ jobs:
           grep -E '^CONFIG_(MACH_EXYNOS|BOOTM_FITIMAGE)=' .config
           make -j"$(nproc)"
           ls -l images/barebox-exynos.img
+          cp images/barebox-exynos.img "$GITHUB_WORKSPACE/out/barebox-exynos.img"
 
       - name: Pack the boot image
         run: |
           mkdir -p out/release
-          devices/boot/samsung-sboot --new out/barebox/images/barebox-exynos.img \
+          devices/boot/samsung-sboot --new out/barebox-exynos.img \
             out/fit/image.fit devices/greatlte/stock.dtb out/release/boot-greatlte.img
           cp out/fit/image.fit out/linux/.config out/release/
           mv out/release/.config out/release/kernel.config 2>/dev/null || true

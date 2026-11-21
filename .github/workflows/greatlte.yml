@@ -1,0 +1,115 @@
+name: greatlte boot image
+
+# Builds the Samsung Galaxy Note 8 kernel, the barebox that S-Boot starts and
+# a boot.img + Odin package from them. Nothing here has been run on a phone.
+#
+# Needs devices/greatlte/stock.dtb: the device tree image of your own stock
+# boot image. Get it on the phone (Termux, root):
+#   dd if=boot-302-stock.img of=stock.dtb bs=2048 skip=15869 count=117
+# (offset 32499712 = 15869 pages, 239616 bytes = 117 pages: from the header)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [greatlte-skeleton]
+    paths:
+      - 'devices/greatlte/**'
+      - 'devices/boot/samsung-sboot'
+      - 'arch/arm64/boot/dts/exynos/**'
+      - 'arch/arm64/configs/exynos*.config'
+      - '.github/workflows/greatlte.yml'
+
+env:
+  BAREBOX_COMMIT: c58b51506d46888bcf0b0b184c2941fb0546dac3
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for the stock device tree
+        run: |
+          test -s devices/greatlte/stock.dtb || {
+            echo "::error::devices/greatlte/stock.dtb is missing; see the comment at the top of this workflow"
+            exit 1
+          }
+          python3 -c "import sys; d=open('devices/greatlte/stock.dtb','rb').read(); sys.exit(0 if d[:4]==b'\xd0\x0d\xfe\xed' else 1)" \
+            || { echo "::error::stock.dtb is not a device tree blob"; exit 1; }
+
+      - name: Install the build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang lld llvm flex bison bc libssl-dev libelf-dev make git \
+            gcc-aarch64-linux-gnu device-tree-compiler u-boot-tools cpio gzip \
+            python3 libncurses-dev
+
+      - name: Configure the Linux kernel
+        run: |
+          export ARCH=arm64 LLVM=1
+          devices/config greatlte out/linux
+          make O=out/linux olddefconfig
+
+      - name: Build the Linux kernel
+        run: |
+          make -j"$(nproc)" O=out/linux ARCH=arm64 LLVM=1 Image exynos/exynos8895-greatlte.dtb
+          ls -l out/linux/arch/arm64/boot/Image out/linux/arch/arm64/boot/dts/exynos/exynos8895-greatlte.dtb
+
+      - name: Build a static arm64 busybox
+        run: |
+          git clone --depth 1 -b 1_36_stable https://git.busybox.net/busybox out/busybox-src
+          cd out/busybox-src
+          make defconfig
+          sed -i -e 's/^# CONFIG_STATIC is not set/CONFIG_STATIC=y/' -e 's/^CONFIG_TC=y/# CONFIG_TC is not set/' .config
+          make -j"$(nproc)" CROSS_COMPILE=aarch64-linux-gnu- oldconfig </dev/null
+          make -j"$(nproc)" CROSS_COMPILE=aarch64-linux-gnu-
+          file busybox || true
+
+      - name: Build the initramfs
+        run: |
+          rm -rf out/initramfs && mkdir -p out/initramfs/{bin,dev,proc,sys}
+          cp out/busybox-src/busybox out/initramfs/bin/busybox
+          cp devices/greatlte/boot/init out/initramfs/init
+          (cd out/initramfs && find . | cpio -o -H newc | gzip -9 > ../initramfs.cpio.gz)
+
+      - name: Build the FIT image
+        run: |
+          mkdir -p out/fit && cd out/fit
+          gzip -9 -c ../linux/arch/arm64/boot/Image > Image.gz
+          cp ../linux/arch/arm64/boot/dts/exynos/exynos8895-greatlte.dtb .
+          cp ../initramfs.cpio.gz .
+          mkimage -f ../../devices/greatlte/boot/image.its image.fit
+          ls -l image.fit
+          test "$(stat -c %s image.fit)" -le $((32 * 1024 * 1024))
+
+      - name: Build barebox
+        run: |
+          git init out/barebox && cd out/barebox
+          git remote add origin https://github.com/barebox/barebox
+          git fetch --depth 1 origin "$BAREBOX_COMMIT"
+          git checkout -q FETCH_HEAD
+          git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0001-samsung-exynos-add-greatlte.diff"
+          cp "$GITHUB_WORKSPACE/arch/arm64/boot/dts/exynos/exynos8895-greatlte.dts" dts/src/arm64/exynos/
+          export ARCH=arm CROSS_COMPILE=aarch64-linux-gnu-
+          make multi_v8_defconfig
+          printf 'CONFIG_ARCH_SAMSUNG=y\nCONFIG_MACH_EXYNOS=y\n' >> .config
+          make olddefconfig
+          grep -E '^CONFIG_(MACH_EXYNOS|BOOTM_FITIMAGE)=' .config
+          make -j"$(nproc)"
+          ls -l images/barebox-exynos.img
+
+      - name: Pack the boot image
+        run: |
+          mkdir -p out/release
+          devices/boot/samsung-sboot --new out/barebox/images/barebox-exynos.img \
+            out/fit/image.fit devices/greatlte/stock.dtb out/release/boot-greatlte.img
+          cp out/fit/image.fit out/linux/.config out/release/
+          mv out/release/.config out/release/kernel.config 2>/dev/null || true
+          (cd out/release && sha256sum * > SHA256SUMS && cat SHA256SUMS)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: greatlte-boot
+          path: out/release/

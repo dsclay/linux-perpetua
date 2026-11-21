@@ -1,0 +1,105 @@
+From 2e561fd7d07636778c564dacb8d79a229aaa8c82 Mon Sep 17 00:00:00 2001
+From: Dex <dex@example.invalid>
+Date: Sat, 21 Nov 2026 08:10:20 +0800
+Subject: [PATCH] ARM: boards: samsung-exynos: add the Samsung Galaxy Note 8
+ (greatlte)
+
+Select the board from the downstream model, "Samsung SM-N950F board based
+on EXYNOS8895" (and the SM-N950N variant), and boot the FIT image that
+s-boot loads as the ramdisk at 0x89000000, as on the Galaxy S8.
+
+The device tree it embeds is the Linux one, arm64/exynos/exynos8895-greatlte.dts,
+which is not in dts/src yet: copy it there before building.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01Eptj55XXrm7ywYcWntDb43
+---
+ arch/arm/boards/samsung-exynos/board.c                |  1 +
+ .../samsung-exynos/defaultenv-exynos/boot/ramfit      |  4 ++++
+ arch/arm/boards/samsung-exynos/lowlevel.c             |  4 ++++
+ arch/arm/dts/Makefile                                 |  1 +
+ arch/arm/dts/exynos8895-greatlte.dts                  | 11 +++++++++++
+ 5 files changed, 21 insertions(+)
+ create mode 100644 arch/arm/dts/exynos8895-greatlte.dts
+
+diff --git a/arch/arm/boards/samsung-exynos/board.c b/arch/arm/boards/samsung-exynos/board.c
+index f26da64a..23e0098b 100644
+--- a/arch/arm/boards/samsung-exynos/board.c
++++ b/arch/arm/boards/samsung-exynos/board.c
+@@ -55,6 +55,7 @@ static inline int exynos_init(struct device *dev)
+ 
+ static const struct of_device_id exynos_of_match[] = {
+ 	{ .compatible = "samsung,dreamlte" },
++	{ .compatible = "samsung,greatlte" },
+ 	{ .compatible = "samsung,x1s" },
+ 	{ /* Sentinel */},
+ };
+diff --git a/arch/arm/boards/samsung-exynos/defaultenv-exynos/boot/ramfit b/arch/arm/boards/samsung-exynos/defaultenv-exynos/boot/ramfit
+index c8fc7e55..2be81c49 100644
+--- a/arch/arm/boards/samsung-exynos/defaultenv-exynos/boot/ramfit
++++ b/arch/arm/boards/samsung-exynos/defaultenv-exynos/boot/ramfit
+@@ -8,6 +8,10 @@ if test "$global.model" = "Samsung Galaxy S8 (SM-G950F)"; then
+ 	global fit_offset=0x9000000
+ fi
+ 
++if test "$global.model" = "Samsung Galaxy Note 8"; then
++	global fit_offset=0x9000000
++fi
++
+ if test "$global.model" = "Samsung Galaxy S20 5G"; then
+ 	global fit_offset=0x4000000
+ fi
+diff --git a/arch/arm/boards/samsung-exynos/lowlevel.c b/arch/arm/boards/samsung-exynos/lowlevel.c
+index a8a27cf0..01148858 100644
+--- a/arch/arm/boards/samsung-exynos/lowlevel.c
++++ b/arch/arm/boards/samsung-exynos/lowlevel.c
+@@ -12,6 +12,7 @@
+ #include <asm/mmu.h>
+ 
+ extern char __dtb_exynos8895_dreamlte_start[];
++extern char __dtb_exynos8895_greatlte_start[];
+ extern char __dtb_exynos990_x1s_start[];
+ 
+ /* called from assembly */
+@@ -56,6 +57,9 @@ static noinline void exynos_continue(void *downstream_fdt)
+ 	/* select device tree dynamically */
+ 	if (is_model(downstream_fdt, "Samsung DREAMLTE")) {
+ 		__dtb_start = __dtb_exynos8895_dreamlte_start;
++	} else if (is_model(downstream_fdt, "Samsung SM-N950")) {
++		/* "Samsung SM-N950F board based on EXYNOS8895" */
++		__dtb_start = __dtb_exynos8895_greatlte_start;
+ 	} else if (is_model(downstream_fdt, "Samsung X1S")) {
+ 		__dtb_start = __dtb_exynos990_x1s_start;
+ 	} else {
+diff --git a/arch/arm/dts/Makefile b/arch/arm/dts/Makefile
+index 51d14d0b..a3fa2031 100644
+--- a/arch/arm/dts/Makefile
++++ b/arch/arm/dts/Makefile
+@@ -14,6 +14,7 @@ lwl-$(CONFIG_MACH_CLEP7212) += ep7212-clep7212.dtb.o
+ lwl-$(CONFIG_MACH_CM_FX6) += imx6dl-cm-fx6.dtb.o imx6q-cm-fx6.dtb.o imx6q-utilite.dtb.o
+ lwl-$(CONFIG_MACH_DFI_FS700_M60) += imx6q-dfi-fs700-m60-6q.dtb.o imx6dl-dfi-fs700-m60-6s.dtb.o
+ lwl-$(CONFIG_MACH_EXYNOS) += exynos8895-dreamlte.dtb.o \
++			exynos8895-greatlte.dtb.o \
+ 			exynos990-x1s.dtb.o
+ lwl-$(CONFIG_MACH_DUCKBILL) += imx28-duckbill.dtb.o
+ lwl-$(CONFIG_MACH_KINDLE_MX50) += imx50-kindle-d01100.dtb.o imx50-kindle-d01200.dtb.o imx50-kindle-ey21.dtb.o
+diff --git a/arch/arm/dts/exynos8895-greatlte.dts b/arch/arm/dts/exynos8895-greatlte.dts
+new file mode 100644
+index 00000000..af3f7133
+--- /dev/null
++++ b/arch/arm/dts/exynos8895-greatlte.dts
+@@ -0,0 +1,11 @@
++// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
++/*
++ * Samsung Galaxy Note 8 (greatlte/SM-N950F) barebox device tree source
++ */
++
++/dts-v1/;
++#include <arm64/exynos/exynos8895-greatlte.dts>
++
++/ {
++	barebox,deep-probe;
++};
+-- 
+2.43.0
+

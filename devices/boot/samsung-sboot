@@ -3,6 +3,7 @@
 """Pack a Samsung S-Boot boot image with a raw arm64 Image and a ramdisk.
 
 Usage: samsung-sboot TEMPLATE IMAGE RAMDISK OUTPUT [EVIDENCE]
+       samsung-sboot --new LOADER PAYLOAD DT OUTPUT
 
 S-Boot (the Exynos bootloader of the Galaxy S8 and Note 8) loads an Android
 header version 0 image from the BOOT partition: a raw kernel, a ramdisk, an
@@ -24,6 +25,14 @@ The image must fit the BOOT partition: SBOOT_PARTITION_SIZE bytes, 40 MiB
 when unset (check it against /proc/partitions on the device). A TEMPLATE
 dumped from the partition is padded with zeros to that size; the padding
 after the trailer marker is not copied.
+
+With --new there is no template: the header is built with the values of the
+Galaxy Note 8's stock boot image (base 0x10000000, kernel 0x10008000,
+ramdisk 0x11000000, tags 0x10000100, page 2048). LOADER is the "kernel" that
+S-Boot starts, for example barebox-exynos.img, PAYLOAD is the ramdisk that
+the loader boots (a FIT image), and DT is the stock device tree image that
+S-Boot needs to find the board and fill in (devices/greatlte/stock.dtb).
+No Android header checks apply to LOADER, which is not a Linux Image.
 
 No device access. OUTPUT and OUTPUT.tar.md5 must not exist.
 """
@@ -97,6 +106,20 @@ def pack(stock, parsed, kernel, ramdisk):
     return bytes(header) + body + parsed["trailer"], sections
 
 
+def build_new(loader, payload, dt):
+    """A header version 0 image from parts, with the stock Note 8 values."""
+    page = 2048
+    header = bytearray(page)
+    header[:8] = MAGIC
+    struct.pack_into("<8I", header, 8, len(loader), 0x10008000, len(payload),
+                     0x11000000, 0, 0, 0x10000100, page)
+    struct.pack_into("<II", header, 40, len(dt), 0x1C000185)
+    sections = dict(kernel=loader, ramdisk=payload, second=b"", dt=dt)
+    header[576:608] = image_id(sections) + bytes(12)
+    body = b"".join(pad(sections[n], page) for n in ("kernel", "ramdisk", "second", "dt"))
+    return bytes(header) + body + MARKER, sections
+
+
 def odin_package(image):
     """A ustar archive with boot.img, and the MD5 line that Odin verifies."""
     buf = io.BytesIO()
@@ -109,7 +132,36 @@ def odin_package(image):
     return data, hashlib.md5(data).hexdigest()
 
 
+def write_outputs(packed, output, package, record):
+    output.write_bytes(packed)
+    tar, md5 = odin_package(packed)
+    package.write_bytes(tar + f"{md5}  {package.name}\n".encode())
+    record.update(bytes=len(packed), sha256=sha(packed), odin_package=package.name,
+                  odin_md5=md5)
+    print(json.dumps(record))
+
+
+def main_new(argv):
+    loader, payload, dt, output = map(Path, argv)
+    package = output.with_name(output.name + ".tar.md5")
+    assert not output.exists() and not package.exists(), "refusing to replace an image"
+    limit = int(os.environ.get("SBOOT_PARTITION_SIZE", DEFAULT_PARTITION))
+    loader_b, payload_b, dt_b = loader.read_bytes(), payload.read_bytes(), dt.read_bytes()
+    assert dt_b[:4] == b"\xd0\x0d\xfe\xed", "DT is not a device tree blob"
+    packed, sections = build_new(loader_b, payload_b, dt_b)
+    assert len(packed) <= limit, f"image is {len(packed)} bytes, the BOOT partition holds {limit}"
+    again = parse(packed)
+    for name in ("kernel", "ramdisk", "second", "dt"):
+        assert again["sections"][name] == sections[name], f"{name} differs after packing"
+    assert again["trailer"] == MARKER
+    write_outputs(packed, output, package,
+                  dict(loader_sha256=sha(loader_b), payload_sha256=sha(payload_b),
+                       dt_sha256=sha(dt_b), partition_limit=limit))
+
+
 def main():
+    if len(sys.argv) == 6 and sys.argv[1] == "--new":
+        return main_new(sys.argv[2:])
     if len(sys.argv) not in (5, 6):
         sys.exit(__doc__)
     template, source, ramdisk, output = map(Path, sys.argv[1:5])

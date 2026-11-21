@@ -1,0 +1,21 @@
+#!/bin/busybox sh
+# Rescue initramfs of the first boot: show that Linux is running, keep the
+# kernel log on the screen and leave a shell on it.
+/bin/busybox --install -s /bin
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /sys/fs/pstore
+mount -t pstore pstore /sys/fs/pstore 2>/dev/null
+
+[ -c /dev/tty0 ] && exec </dev/tty0 >/dev/tty0 2>&1
+echo
+echo "linux-perpetua on the Samsung Galaxy Note 8"
+uname -a
+echo
+ls /sys/fs/pstore 2>/dev/null
+dmesg | tail -n 60
+echo
+while true; do
+	sh
+done

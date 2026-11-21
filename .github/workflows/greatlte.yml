@@ -44,7 +44,14 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             clang lld llvm flex bison bc libssl-dev libelf-dev make git \
             gcc-aarch64-linux-gnu device-tree-compiler u-boot-tools cpio gzip \
-            python3 libncurses-dev
+            python3 libncurses-dev ccache libc6-dev-arm64-cross
+
+      - name: Restore the compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: out/ccache
+          key: ccache-greatlte-${{ github.run_id }}
+          restore-keys: ccache-greatlte-
 
       - name: Configure the Linux kernel
         run: |
@@ -53,19 +60,30 @@ jobs:
           make O=out/linux olddefconfig
 
       - name: Build the Linux kernel
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/out/ccache
+          CCACHE_BASEDIR: ${{ github.workspace }}
+          CCACHE_MAXSIZE: 2G
         run: |
-          make -j"$(nproc)" O=out/linux ARCH=arm64 LLVM=1 Image exynos/exynos8895-greatlte.dtb
+          ccache -z
+          make -j"$(nproc)" O=out/linux ARCH=arm64 LLVM=1 CC="ccache clang" Image exynos/exynos8895-greatlte.dtb
+          ccache -s
           ls -l out/linux/arch/arm64/boot/Image out/linux/arch/arm64/boot/dts/exynos/exynos8895-greatlte.dtb
+
+      - name: Save the compiler cache
+        uses: actions/cache/save@v4
+        with:
+          path: out/ccache
+          key: ccache-greatlte-${{ github.run_id }}
 
       - name: Build a static arm64 busybox
         run: |
-          git clone --depth 1 -b 1_36_stable https://git.busybox.net/busybox out/busybox-src
+          git clone --depth 1 -b 1_36_stable https://github.com/mirror/busybox out/busybox-src
           cd out/busybox-src
-          make defconfig
-          sed -i -e 's/^# CONFIG_STATIC is not set/CONFIG_STATIC=y/' -e 's/^CONFIG_TC=y/# CONFIG_TC is not set/' .config
-          make -j"$(nproc)" CROSS_COMPILE=aarch64-linux-gnu- oldconfig </dev/null
+          "$GITHUB_WORKSPACE/devices/greatlte/boot/busybox-config.sh"
           make -j"$(nproc)" CROSS_COMPILE=aarch64-linux-gnu-
-          file busybox || true
+          file busybox
+          test -x busybox
 
       - name: Build the initramfs
         run: |

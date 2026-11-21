@@ -4,7 +4,7 @@ name: greatlte boot image
 # a boot.img + Odin package from them. Nothing here has been run on a phone.
 #
 # Needs devices/greatlte/stock.dtb: the device tree image of your own stock
-# boot image. Get it on the phone (Termux, root):
+# boot image (a Samsung "DTBH" container with the device tree inside). Get it on the phone (Termux, root):
 #   dd if=boot-302-stock.img of=stock.dtb bs=2048 skip=15869 count=117
 # (offset 32499712 = 15869 pages, 239616 bytes = 117 pages: from the header)
 
@@ -35,8 +35,8 @@ jobs:
             echo "::error::devices/greatlte/stock.dtb is missing; see the comment at the top of this workflow"
             exit 1
           }
-          python3 -c "import sys; d=open('devices/greatlte/stock.dtb','rb').read(); sys.exit(0 if d[:4]==b'\xd0\x0d\xfe\xed' else 1)" \
-            || { echo "::error::stock.dtb is not a device tree blob"; exit 1; }
+          python3 -c "import sys; d=open('devices/greatlte/stock.dtb','rb').read(); sys.exit(0 if d[:4] in (b'DTBH', b'\xd0\x0d\xfe\xed') else 1)" \
+            || { echo "::error::stock.dtb is neither a DTBH container nor a device tree blob"; exit 1; }
 
       - name: Install the build tools
         run: |

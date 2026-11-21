@@ -31,7 +31,8 @@ Galaxy Note 8's stock boot image (base 0x10000000, kernel 0x10008000,
 ramdisk 0x11000000, tags 0x10000100, page 2048). LOADER is the "kernel" that
 S-Boot starts, for example barebox-exynos.img, PAYLOAD is the ramdisk that
 the loader boots (a FIT image), and DT is the stock device tree image that
-S-Boot needs to find the board and fill in (devices/greatlte/stock.dtb).
+S-Boot needs to find the board and fill in (devices/greatlte/stock.dtb):
+a Samsung DTBH container, or a raw device tree blob.
 No Android header checks apply to LOADER, which is not a Linux Image.
 
 No device access. OUTPUT and OUTPUT.tar.md5 must not exist.
@@ -147,7 +148,7 @@ def main_new(argv):
     assert not output.exists() and not package.exists(), "refusing to replace an image"
     limit = int(os.environ.get("SBOOT_PARTITION_SIZE", DEFAULT_PARTITION))
     loader_b, payload_b, dt_b = loader.read_bytes(), payload.read_bytes(), dt.read_bytes()
-    assert dt_b[:4] == b"\xd0\x0d\xfe\xed", "DT is not a device tree blob"
+    assert dt_b[:4] in (b"DTBH", b"\xd0\x0d\xfe\xed"), "DT is neither a DTBH container nor a device tree blob"
     packed, sections = build_new(loader_b, payload_b, dt_b)
     assert len(packed) <= limit, f"image is {len(packed)} bytes, the BOOT partition holds {limit}"
     again = parse(packed)

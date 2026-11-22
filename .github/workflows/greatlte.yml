@@ -114,6 +114,7 @@ jobs:
           git fetch --depth 1 origin "$BAREBOX_COMMIT"
           git checkout -q FETCH_HEAD
           git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0001-samsung-exynos-add-greatlte.diff"
+          git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0002-samsung-exynos-paint-stages.diff"
           cp "$GITHUB_WORKSPACE/arch/arm64/boot/dts/exynos/exynos8895-greatlte.dts" dts/src/arm64/exynos/
           # Stage marker: white screen = barebox reached its boot script.
           sed -i '/^addpart/i memset 0xcc000000 0xff 17049600' arch/arm/boards/samsung-exynos/defaultenv-exynos/boot/ramfit

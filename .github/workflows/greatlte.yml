@@ -123,9 +123,9 @@ jobs:
           cp "$GITHUB_WORKSPACE/arch/arm64/boot/dts/exynos/exynos8895-greatlte.dts" dts/src/arm64/exynos/
           export ARCH=arm CROSS_COMPILE=aarch64-linux-gnu-
           make multi_v8_defconfig
-          printf 'CONFIG_ARCH_SAMSUNG=y\nCONFIG_MACH_EXYNOS=y\n' >> .config
+          printf 'CONFIG_ARCH_SAMSUNG=y\nCONFIG_MACH_EXYNOS=y\nCONFIG_DRIVER_VIDEO_SIMPLEFB_CLIENT=y\nCONFIG_FONT_TER16x32=y\n' >> .config
           make olddefconfig
-          grep -E '^CONFIG_(MACH_EXYNOS|BOOTM_FITIMAGE)=' .config
+          grep -E '^CONFIG_(MACH_EXYNOS|BOOTM_FITIMAGE|DRIVER_VIDEO_SIMPLEFB_CLIENT|FONT_TER16x32|FRAMEBUFFER_CONSOLE)=' .config
           make -j"$(nproc)"
           ls -l images/barebox-exynos.img
           cp images/barebox-exynos.img "$GITHUB_WORKSPACE/out/barebox-exynos.img"

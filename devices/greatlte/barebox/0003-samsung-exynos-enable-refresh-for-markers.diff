@@ -1,0 +1,25 @@
+diff --git a/arch/arm/boards/samsung-exynos/lowlevel.c b/arch/arm/boards/samsung-exynos/lowlevel.c
+index 62c86356..260f5f63 100644
+--- a/arch/arm/boards/samsung-exynos/lowlevel.c
++++ b/arch/arm/boards/samsung-exynos/lowlevel.c
+@@ -18,14 +18,20 @@ extern char __dtb_exynos990_x1s_start[];
+ /*
+  * Debug marker: fill the bootloader's 1440x2960 framebuffer with one colour.
+  * The MMU is still off here, so the stores reach the display memory.
++ * S-Boot leaves the display refresh off when it starts the kernel (board.c
++ * sets the same trigger bits later), so the markers turn it on first.
+  * red: barebox started, yellow: no valid device tree from S-Boot,
+  * blue: model not recognised, green: model matched.
+  */
+ static noinline void paint(unsigned int argb)
+ {
+ 	volatile unsigned int *fb = (volatile unsigned int *)0xcc000000UL;
++	/* DECON0 HW_SW_TRIG_CONTROL: TRIG_AUTO_MASK_EN | SW_TRIG_EN | HW_TRIG_EN */
++	volatile unsigned int *trig = (volatile unsigned int *)(0x12860000UL + 0x70);
+ 	unsigned long i;
+ 
++	*trig = (1 << 12) | (1 << 8) | 1;
++
+ 	for (i = 0; i < 1440UL * 2960UL; i++)
+ 		fb[i] = argb;
+ }

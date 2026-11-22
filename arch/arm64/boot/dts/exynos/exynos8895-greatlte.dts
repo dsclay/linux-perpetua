@@ -28,7 +28,7 @@
 		#size-cells = <1>;
 		ranges;
 
-		bootargs = "rdinit=/init panic=10";
+		bootargs = "rdinit=/init panic=10 clk_ignore_unused pd_ignore_unused";
 
 		/*
 		 * The bootloader's own tree, as /sys/firmware/fdt shows it. The

@@ -1,0 +1,40 @@
+diff --git a/arch/arm/boards/samsung-exynos/board.c b/arch/arm/boards/samsung-exynos/board.c
+index b5b4a343..e55db37c 100644
+--- a/arch/arm/boards/samsung-exynos/board.c
++++ b/arch/arm/boards/samsung-exynos/board.c
+@@ -3,6 +3,7 @@
+  * Copyright (C) 2025 Ivaylo Ivanov <ivo.ivanov.ivanov1@gmail.com>
+  */
+ #include <common.h>
++#include <io.h>
+ #include <envfs.h>
+ #include <init.h>
+ #include <of.h>
+@@ -19,21 +20,21 @@
+ #define SW_TRIG_EN		BIT(8)
+ #define HW_TRIG_EN		BIT(0)
+ 
+-void dma_flush_range(void *ptr, size_t size);
+-
+ /*
+  * Debug marker for the stages after the MMU is on: fill the bootloader's
+- * framebuffer and flush the caches so the display sees it.
++ * framebuffer through an uncached mapping of its own. The plain physical
++ * address is not mapped any more once the MMU is on.
+  */
+ static void exynos_mark(u32 argb)
+ {
+-	u32 *fb = IOMEM(0xcc000000);
++	u32 *fb = ioremap(0xcc000000, 1440UL * 2960UL * 4);
+ 	unsigned long i;
+ 
++	if (!fb)
++		return;
++
+ 	for (i = 0; i < 1440UL * 2960UL; i++)
+ 		fb[i] = argb;
+-
+-	dma_flush_range(fb, 1440UL * 2960UL * 4);
+ }
+ 
+ static int exynos_postcore_init(void)

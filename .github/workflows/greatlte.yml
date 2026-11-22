@@ -118,9 +118,8 @@ jobs:
           git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0003-samsung-exynos-enable-refresh-for-markers.diff"
           git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0004-samsung-exynos-mark-later-stages.diff"
           git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0005-samsung-exynos-mark-memory-read.diff"
+          git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0006-samsung-exynos-mark-through-ioremap.diff"
           cp "$GITHUB_WORKSPACE/arch/arm64/boot/dts/exynos/exynos8895-greatlte.dts" dts/src/arm64/exynos/
-          # Stage marker: white screen = barebox reached its boot script.
-          sed -i '/^addpart/i memset 0xcc000000 0xff 17049600' arch/arm/boards/samsung-exynos/defaultenv-exynos/boot/ramfit
           export ARCH=arm CROSS_COMPILE=aarch64-linux-gnu-
           make multi_v8_defconfig
           printf 'CONFIG_ARCH_SAMSUNG=y\nCONFIG_MACH_EXYNOS=y\n' >> .config
@@ -129,20 +128,12 @@ jobs:
           make -j"$(nproc)"
           ls -l images/barebox-exynos.img
           cp images/barebox-exynos.img "$GITHUB_WORKSPACE/out/barebox-exynos.img"
-          # Second image: the same barebox, but with the Galaxy S8 device tree that is
-          # known to work on the S8. It tells a hang caused by our tree from any other.
-          sed -i 's/__dtb_start = __dtb_exynos8895_greatlte_start/__dtb_start = __dtb_exynos8895_dreamlte_start/' arch/arm/boards/samsung-exynos/lowlevel.c
-          grep -n '__dtb_start = ' arch/arm/boards/samsung-exynos/lowlevel.c
-          make -j"$(nproc)"
-          cp images/barebox-exynos.img "$GITHUB_WORKSPACE/out/barebox-exynos-s8dtb.img"
 
       - name: Pack the boot image
         run: |
           mkdir -p out/release
           devices/boot/samsung-sboot --new out/barebox-exynos.img \
             out/fit/image.fit devices/greatlte/stock.dtb out/release/boot-greatlte.img
-          devices/boot/samsung-sboot --new out/barebox-exynos-s8dtb.img \
-            out/fit/image.fit devices/greatlte/stock.dtb out/release/boot-greatlte-s8dtb.img
           cp out/fit/image.fit out/linux/.config out/release/
           mv out/release/.config out/release/kernel.config 2>/dev/null || true
           (cd out/release && sha256sum * > SHA256SUMS && cat SHA256SUMS)

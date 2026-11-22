@@ -118,7 +118,7 @@ jobs:
           git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0003-samsung-exynos-enable-refresh-for-markers.diff"
           git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0004-samsung-exynos-mark-later-stages.diff"
           git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0005-samsung-exynos-mark-memory-read.diff"
-          git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0006-samsung-exynos-mark-through-ioremap.diff"
+          git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0006-samsung-exynos-mark-through-remap.diff"
           cp "$GITHUB_WORKSPACE/arch/arm64/boot/dts/exynos/exynos8895-greatlte.dts" dts/src/arm64/exynos/
           export ARCH=arm CROSS_COMPILE=aarch64-linux-gnu-
           make multi_v8_defconfig

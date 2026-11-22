@@ -1,0 +1,100 @@
+diff --git a/arch/arm/boards/samsung-exynos/board.c b/arch/arm/boards/samsung-exynos/board.c
+index 26256d83..4480f914 100644
+--- a/arch/arm/boards/samsung-exynos/board.c
++++ b/arch/arm/boards/samsung-exynos/board.c
+@@ -28,11 +28,27 @@
+ static void exynos_mark(u32 argb)
+ {
+ 	u32 *fb = IOMEM(0xcc000000);
+-	unsigned long i;
++	unsigned long b, i;
+ 
+ 	remap_range(fb, 1440UL * 2960UL * 4, MAP_UNCACHED);
+ 
+-	for (i = 0; i < 1440UL * 2960UL; i++)
++	/* One band of 246 rows per stage, so that the earlier stages stay visible. */
++	switch (argb) {
++	case 0xffff0000: b = 0; break;		/* red: barebox started */
++	case 0xff00ff00:			/* green: model matched */
++	case 0xff0000ff:			/* blue: model not recognised */
++	case 0xffffff00: b = 1; break;		/* yellow: no device tree */
++	case 0xff00ffff: b = 2; break;		/* cyan: memory read */
++	case 0xffffffff: b = 3; break;		/* white: before the MMU */
++	case 0xff8000ff: b = 4; break;		/* purple: MMU on */
++	case 0xffff80c0: b = 5; break;		/* pink: unpacked */
++	case 0xff804000: b = 6; break;		/* brown: jump next */
++	case 0xffff00ff: b = 7; break;		/* magenta: board code */
++	case 0xffff8000: b = 8; break;		/* orange: initcalls done */
++	default: b = 11; break;
++	}
++
++	for (i = b * 1440UL * 246UL; i < (b + 1) * 1440UL * 246UL; i++)
+ 		fb[i] = argb;
+ }
+ 
+diff --git a/arch/arm/boards/samsung-exynos/lowlevel.c b/arch/arm/boards/samsung-exynos/lowlevel.c
+index 4cb81fb9..6559ce68 100644
+--- a/arch/arm/boards/samsung-exynos/lowlevel.c
++++ b/arch/arm/boards/samsung-exynos/lowlevel.c
+@@ -28,11 +28,27 @@ static noinline void paint(unsigned int argb)
+ 	volatile unsigned int *fb = (volatile unsigned int *)0xcc000000UL;
+ 	/* DECON0 HW_SW_TRIG_CONTROL: TRIG_AUTO_MASK_EN | SW_TRIG_EN | HW_TRIG_EN */
+ 	volatile unsigned int *trig = (volatile unsigned int *)(0x12860000UL + 0x70);
+-	unsigned long i;
++	unsigned long b, i;
+ 
+ 	*trig = (1 << 12) | (1 << 8) | 1;
+ 
+-	for (i = 0; i < 1440UL * 2960UL; i++)
++	/* One band of 246 rows per stage, so that the earlier stages stay visible. */
++	switch (argb) {
++	case 0xffff0000: b = 0; break;		/* red: barebox started */
++	case 0xff00ff00:			/* green: model matched */
++	case 0xff0000ff:			/* blue: model not recognised */
++	case 0xffffff00: b = 1; break;		/* yellow: no device tree */
++	case 0xff00ffff: b = 2; break;		/* cyan: memory read */
++	case 0xffffffff: b = 3; break;		/* white: before the MMU */
++	case 0xff8000ff: b = 4; break;		/* purple: MMU on */
++	case 0xffff80c0: b = 5; break;		/* pink: unpacked */
++	case 0xff804000: b = 6; break;		/* brown: jump next */
++	case 0xffff00ff: b = 7; break;		/* magenta: board code */
++	case 0xffff8000: b = 8; break;		/* orange: initcalls done */
++	default: b = 11; break;
++	}
++
++	for (i = b * 1440UL * 246UL; i < (b + 1) * 1440UL * 246UL; i++)
+ 		fb[i] = argb;
+ }
+ 
+diff --git a/arch/arm/cpu/uncompress.c b/arch/arm/cpu/uncompress.c
+index 1f16d6fa..9bf698f3 100644
+--- a/arch/arm/cpu/uncompress.c
++++ b/arch/arm/cpu/uncompress.c
+@@ -40,9 +40,25 @@ extern unsigned char input_data_end[];
+ static noinline void exynos_pbl_mark(unsigned int argb)
+ {
+ 	volatile unsigned int *fb = (volatile unsigned int *)0xcc000000UL;
+-	unsigned long i;
++	unsigned long b, i;
++
++	/* One band of 246 rows per stage, so that the earlier stages stay visible. */
++	switch (argb) {
++	case 0xffff0000: b = 0; break;		/* red: barebox started */
++	case 0xff00ff00:			/* green: model matched */
++	case 0xff0000ff:			/* blue: model not recognised */
++	case 0xffffff00: b = 1; break;		/* yellow: no device tree */
++	case 0xff00ffff: b = 2; break;		/* cyan: memory read */
++	case 0xffffffff: b = 3; break;		/* white: before the MMU */
++	case 0xff8000ff: b = 4; break;		/* purple: MMU on */
++	case 0xffff80c0: b = 5; break;		/* pink: unpacked */
++	case 0xff804000: b = 6; break;		/* brown: jump next */
++	case 0xffff00ff: b = 7; break;		/* magenta: board code */
++	case 0xffff8000: b = 8; break;		/* orange: initcalls done */
++	default: b = 11; break;
++	}
+ 
+-	for (i = 0; i < 1440UL * 2960UL; i++)
++	for (i = b * 1440UL * 246UL; i < (b + 1) * 1440UL * 246UL; i++)
+ 		fb[i] = argb;
+ }
+ #else

@@ -1,0 +1,52 @@
+diff --git a/arch/arm/boards/samsung-exynos/board.c b/arch/arm/boards/samsung-exynos/board.c
+index 23e0098b..b5b4a343 100644
+--- a/arch/arm/boards/samsung-exynos/board.c
++++ b/arch/arm/boards/samsung-exynos/board.c
+@@ -19,6 +19,23 @@
+ #define SW_TRIG_EN		BIT(8)
+ #define HW_TRIG_EN		BIT(0)
+ 
++void dma_flush_range(void *ptr, size_t size);
++
++/*
++ * Debug marker for the stages after the MMU is on: fill the bootloader's
++ * framebuffer and flush the caches so the display sees it.
++ */
++static void exynos_mark(u32 argb)
++{
++	u32 *fb = IOMEM(0xcc000000);
++	unsigned long i;
++
++	for (i = 0; i < 1440UL * 2960UL; i++)
++		fb[i] = argb;
++
++	dma_flush_range(fb, 1440UL * 2960UL * 4);
++}
++
+ static int exynos_postcore_init(void)
+ {
+ 	void __iomem *trig_ctrl;
+@@ -39,10 +56,23 @@ static int exynos_postcore_init(void)
+ 	writel(TRIG_AUTO_MASK_EN | SW_TRIG_EN | HW_TRIG_EN,
+ 	       trig_ctrl);
+ 
++	/* magenta: the board code ran, with the MMU on */
++	exynos_mark(0xffff00ff);
++
+ 	return 0;
+ }
+ coredevice_initcall(exynos_postcore_init);
+ 
++static int exynos_late_marker(void)
++{
++	/* orange: all initcalls are done, the boot script is next */
++	if (of_machine_is_compatible("samsung,exynos8895"))
++		exynos_mark(0xffff8000);
++
++	return 0;
++}
++late_initcall(exynos_late_marker);
++
+ static inline int exynos_init(struct device *dev)
+ {
+ 	barebox_set_model(of_get_model());

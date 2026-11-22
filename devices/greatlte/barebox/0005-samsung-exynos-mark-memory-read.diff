@@ -1,0 +1,14 @@
+diff --git a/arch/arm/boards/samsung-exynos/lowlevel.c b/arch/arm/boards/samsung-exynos/lowlevel.c
+index 260f5f63..4cb81fb9 100644
+--- a/arch/arm/boards/samsung-exynos/lowlevel.c
++++ b/arch/arm/boards/samsung-exynos/lowlevel.c
+@@ -92,6 +92,9 @@ static noinline void exynos_continue(void *downstream_fdt)
+ 	fdt = __dtb_start + get_runtime_offset();
+ 	fdt_find_mem(fdt, &membase, &memsize);
+ 
++	/* cyan: the device tree and its memory bank were read */
++	paint(0xff00ffff);
++
+ 	barebox_arm_entry(membase, memsize, fdt);
+ }
+ 

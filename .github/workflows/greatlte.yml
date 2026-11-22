@@ -115,6 +115,8 @@ jobs:
           git checkout -q FETCH_HEAD
           git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0001-samsung-exynos-add-greatlte.diff"
           cp "$GITHUB_WORKSPACE/arch/arm64/boot/dts/exynos/exynos8895-greatlte.dts" dts/src/arm64/exynos/
+          # Stage marker: white screen = barebox reached its boot script.
+          sed -i '/^addpart/i memset 0xcc000000 0xff 17049600' arch/arm/boards/samsung-exynos/defaultenv-exynos/boot/ramfit
           export ARCH=arm CROSS_COMPILE=aarch64-linux-gnu-
           make multi_v8_defconfig
           printf 'CONFIG_ARCH_SAMSUNG=y\nCONFIG_MACH_EXYNOS=y\n' >> .config

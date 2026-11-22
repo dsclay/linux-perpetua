@@ -8,6 +8,9 @@ mount -t devtmpfs devtmpfs /dev
 mkdir -p /sys/fs/pstore
 mount -t pstore pstore /sys/fs/pstore 2>/dev/null
 
+# Stage marker: grey screen = Linux userspace is running (barebox paints white).
+[ -c /dev/fb0 ] && tr '\0' '\200' </dev/zero >/dev/fb0 2>/dev/null
+
 [ -c /dev/tty0 ] && exec </dev/tty0 >/dev/tty0 2>&1
 echo
 echo "linux-perpetua on the Samsung Galaxy Note 8"

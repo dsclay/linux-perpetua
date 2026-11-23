@@ -1,0 +1,112 @@
+diff --git a/arch/arm/cpu/start.c b/arch/arm/cpu/start.c
+index 12fccdaf..66abc0c9 100644
+--- a/arch/arm/cpu/start.c
++++ b/arch/arm/cpu/start.c
+@@ -15,6 +15,7 @@
+ #include <asm/barebox-arm-head.h>
+ #include <asm-generic/memory_layout.h>
+ #include <asm/sections.h>
++#include <exynos-debug-mark.h>
+ #include <asm/secure.h>
+ #include <asm/unaligned.h>
+ #include <asm/cache.h>
+@@ -59,6 +60,9 @@ __noreturn void arm_barebox_non_pbl_start(unsigned long membase,
+ 							   barebox_image_size,
+ 							   hd);
+ 
++	/* grey: barebox proper is running its first C code */
++	exynos_mark_all(0xff808080);
++
+ 	if (IS_ENABLED(CONFIG_CPU_V7VE))
+ 		armv7_hyp_install();
+ 
+diff --git a/common/startup.c b/common/startup.c
+index 996672da..50e07ffd 100644
+--- a/common/startup.c
++++ b/common/startup.c
+@@ -46,6 +46,7 @@
+ #include <pbl/handoff-data.h>
+ #include <libfile.h>
+ #include <fuzz.h>
++#include <exynos-debug-mark.h>
+ #include <of.h>
+ 
+ extern initcall_t __barebox_initcalls_start[], __barebox_early_initcalls_end[],
+@@ -441,10 +442,12 @@ int (*barebox_main)(void)
+ void __noreturn start_barebox(void)
+ {
+ 	initcall_t *initcall;
++	unsigned int exynos_idx = 0;
+ 	int result;
+ 
+ 	for (initcall = __barebox_initcalls_start;
+ 			initcall < __barebox_initcalls_end; initcall++) {
++		exynos_mark_index(++exynos_idx);
+ 		pr_debug("initcall-> %pS\n", *initcall);
+ 		result = (*initcall)();
+ 		if (result)
+@@ -455,6 +458,9 @@ void __noreturn start_barebox(void)
+ 	barebox_system_state = BAREBOX_RUNNING;
+ 	pr_debug("initcalls done\n");
+ 
++	/* green: all initcalls are done */
++	exynos_mark_all(0xff00ff00);
++
+ 
+ 	if (IS_ENABLED(CONFIG_SELFTEST_AUTORUN))
+ 		selftests_run(IS_ENABLED(CONFIG_SELFTEST_AUTORUN_DESTRUCTIVE));
+diff --git a/include/exynos-debug-mark.h b/include/exynos-debug-mark.h
+new file mode 100644
+index 00000000..053b8dc3
+--- /dev/null
++++ b/include/exynos-debug-mark.h
+@@ -0,0 +1,49 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/*
++ * Debug markers for the Samsung Exynos boot, drawn into the bootloader's
++ * framebuffer below the stage bands (rows 1968 to 2867): ten blocks of 90 rows
++ * that show a number in binary, the top block the highest bit, white for 1
++ * and black for 0. start_barebox() shows the number of the initcall it is
++ * running, so the last number on the screen names the initcall that stopped.
++ */
++#ifndef EXYNOS_DEBUG_MARK_H
++#define EXYNOS_DEBUG_MARK_H
++
++#ifdef CONFIG_MACH_EXYNOS
++static inline void exynos_mark_block(unsigned int blk, unsigned int argb)
++{
++	volatile unsigned int *p = (volatile unsigned int *)
++		(0xcc000000UL + (1968UL + blk * 90UL) * 1440UL * 4UL);
++	unsigned long i;
++
++	for (i = 0; i < 90UL * 1440UL; i++)
++		p[i] = argb;
++}
++
++static inline void exynos_mark_all(unsigned int argb)
++{
++	unsigned int blk;
++
++	for (blk = 0; blk < 10; blk++)
++		exynos_mark_block(blk, argb);
++}
++
++static inline void exynos_mark_index(unsigned int idx)
++{
++	static unsigned int prev = ~0U;
++	unsigned int blk, shift;
++
++	for (blk = 0; blk < 10; blk++) {
++		shift = 9 - blk;
++		if (prev == ~0U || ((prev >> shift) & 1) != ((idx >> shift) & 1))
++			exynos_mark_block(blk, ((idx >> shift) & 1) ?
++					  0xffffffff : 0xff000000);
++	}
++	prev = idx;
++}
++#else
++static inline void exynos_mark_all(unsigned int argb) { }
++static inline void exynos_mark_index(unsigned int idx) { }
++#endif
++
++#endif

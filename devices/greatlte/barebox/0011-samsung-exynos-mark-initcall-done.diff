@@ -1,0 +1,12 @@
+diff --git a/common/startup.c b/common/startup.c
+index 366079e0..332c2209 100644
+--- a/common/startup.c
++++ b/common/startup.c
+@@ -455,6 +455,7 @@ void __noreturn start_barebox(void)
+ 		exynos_mark_index(++exynos_idx);
+ 		pr_debug("initcall-> %pS\n", *initcall);
+ 		result = (*initcall)();
++		exynos_mark_index(exynos_idx | 0x200);
+ 		if (result)
+ 			pr_err("initcall %pS failed: %pe\n", *initcall,
+ 					ERR_PTR(result));

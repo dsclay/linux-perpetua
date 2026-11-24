@@ -123,6 +123,7 @@ jobs:
           git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0008-samsung-exynos-mark-bands.diff"
           git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0009-samsung-exynos-mark-initcall-index.diff"
           git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0010-samsung-exynos-trace-platform-init.diff"
+          git apply "$GITHUB_WORKSPACE/devices/greatlte/barebox/0011-samsung-exynos-mark-initcall-done.diff"
           cp "$GITHUB_WORKSPACE/arch/arm64/boot/dts/exynos/exynos8895-greatlte.dts" dts/src/arm64/exynos/
           # Stage markers of the boot script, drawn through the mapping that the
           # orange marker made, one band each: 10 white = script started, 11 light grey =
